@@ -14,7 +14,10 @@ class SearchMetadata:
     def __init__(self, image_data):
         self._data = image_data
 
-    def _search(self, getter, sub: str) -> list:
+    def _search(self, getter, sub) -> list:
+        if sub is None:
+            return []
+        sub = str(sub)          # tolera valors no string (p.ex. un seed numèric)
         return [uuid for uuid in self._data.get_uuids()
                 if getter(uuid).find(sub) != -1]
 
@@ -41,7 +44,8 @@ class SearchMetadata:
 
     def and_operator(self, list1: list, list2: list) -> list:
         """Intersecció: UUID presents a les dues llistes (no modifica les originals)."""
-        in_second = set(list2)
+        list1 = list1 or []
+        in_second = set(list2 or [])
         result = []
         seen = set()
         for uuid in list1:
@@ -54,7 +58,7 @@ class SearchMetadata:
         """Unió sense duplicats (no modifica les originals)."""
         result = []
         seen = set()
-        for uuid in list1 + list2:
+        for uuid in list(list1 or []) + list(list2 or []):
             if uuid not in seen:
                 seen.add(uuid)
                 result.append(uuid)
