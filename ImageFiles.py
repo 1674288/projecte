@@ -42,6 +42,23 @@ class ImageFiles:
         self._removed = sorted(self._files - found)
         self._files = found
 
+        # --- DEBUG TEMPORAL: esborrar quan ho hàgim vist a Gradescope ---
+        try:
+            root = cfg.get_root()
+            parent = os.path.dirname(root)
+            ex = sorted(found)[:2]
+            print("DEBUG-IF path={!r} ROOT_DIR={!r} root={!r} cwd={!r}".format(
+                path, cfg.ROOT_DIR, root, os.getcwd()))
+            print("DEBUG-IF n={} exemples={} a_root={} a_pare={}".format(
+                len(found), ex,
+                [os.path.exists(os.path.join(root, e)) for e in ex],
+                [os.path.exists(os.path.join(parent, e)) for e in ex]))
+            print("DEBUG-IF ls(root)={} ls(pare)={}".format(
+                sorted(os.listdir(root))[:6], sorted(os.listdir(parent))[:6]))
+        except Exception as e:
+            print("DEBUG-IF error:", e)
+        # --- fi del debug ---
+
     def files_added(self) -> list:
         """Paths relatius afegits des de l'última crida a reload_fs()."""
         return list(self._added)
