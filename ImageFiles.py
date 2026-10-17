@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 ImageFiles.py : gestiona el llistat d'arxius PNG de la col·lecció.
 
