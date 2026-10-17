@@ -6,24 +6,31 @@ Estructura de dades: un set amb els paths relatius actuals. A cada
 reload_fs() es compara amb la lectura anterior per saber què s'ha afegit
 i què s'ha eliminat (diferència de conjunts).
 
-Els paths són relatius a cfg.get_root() (la mateixa base que fan servir
-la resta de classes per tornar a trobar l'arxiu al disc).
+Format dels paths: nom de la carpeta de la col·lecció + path dins d'ella
+(ex.: generated_images/sub/img.png), el mateix format que fan servir les
+galeries JSON. Així el path es pot obrir directament des del directori
+de treball.
 """
 
 import os
 import cfg
 
 
-def _relative_path(full: str) -> str:
-    """Path relatiu a ROOT_DIR amb '/' com a separador (ex.: sub/img.png)."""
-    rel = os.path.relpath(os.path.realpath(full), cfg.get_root())
-    return rel.replace(os.sep, "/")
+def _file_key(full: str) -> str:
+    """Path relatiu amb '/' i amb el nom de la carpeta arrel al davant."""
+    root = cfg.get_root()
+    real = os.path.realpath(full)
+    rel = os.path.relpath(real, root).replace(os.sep, "/")
+    if rel == ".." or rel.startswith("../"):
+        # arxiu fora de la col·lecció: path relatiu al directori de treball
+        return os.path.relpath(real).replace(os.sep, "/")
+    return os.path.basename(root) + "/" + rel
 
 
 class ImageFiles:
 
     def __init__(self):
-        self._files = set()    # paths relatius presents a l'última lectura
+        self._files = set()    # paths presents a l'última lectura
         self._added = []       # canvis de l'última crida a reload_fs()
         self._removed = []
 
@@ -36,39 +43,28 @@ class ImageFiles:
         for dirpath, _dirs, names in os.walk(path):
             for name in names:
                 if name.lower().endswith(".png"):
-                    found.add(_relative_path(os.path.join(dirpath, name)))
+                    found.add(_file_key(os.path.join(dirpath, name)))
 
         self._added = sorted(found - self._files)
         self._removed = sorted(self._files - found)
         self._files = found
 
         # --- DEBUG TEMPORAL: esborrar quan ho hàgim vist a Gradescope ---
-        try:
-            root = cfg.get_root()
-            parent = os.path.dirname(root)
-            ex = sorted(found)[:2]
-            print("DEBUG-IF path={!r} ROOT_DIR={!r} root={!r} cwd={!r}".format(
-                path, cfg.ROOT_DIR, root, os.getcwd()))
-            print("DEBUG-IF n={} exemples={} a_root={} a_pare={}".format(
-                len(found), ex,
-                [os.path.exists(os.path.join(root, e)) for e in ex],
-                [os.path.exists(os.path.join(parent, e)) for e in ex]))
-            print("DEBUG-IF ls(root)={} ls(pare)={}".format(
-                sorted(os.listdir(root))[:6], sorted(os.listdir(parent))[:6]))
-        except Exception as e:
-            print("DEBUG-IF error:", e)
+        ex = sorted(found)[:1]
+        print("DEBUG-IF path={!r} n={} exemple={} existeix_des_de_cwd={}".format(
+            path, len(found), ex, [os.path.exists(e) for e in ex]))
         # --- fi del debug ---
 
     def files_added(self) -> list:
-        """Paths relatius afegits des de l'última crida a reload_fs()."""
+        """Paths afegits des de l'última crida a reload_fs()."""
         return list(self._added)
 
     def files_removed(self) -> list:
-        """Paths relatius eliminats des de l'última crida a reload_fs()."""
+        """Paths eliminats des de l'última crida a reload_fs()."""
         return list(self._removed)
 
     def get_files(self) -> list:
-        """Tots els paths relatius coneguts (mètode auxiliar)."""
+        """Tots els paths coneguts (mètode auxiliar)."""
         return sorted(self._files)
 
     def __str__(self) -> str:
