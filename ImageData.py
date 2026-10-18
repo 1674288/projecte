@@ -20,14 +20,6 @@ def _dbg(msg):
     if _DEBUG_LEFT[0] > 0:
         _DEBUG_LEFT[0] -= 1
         print("DEBUG-ID " + msg)
-
-
-# Valors que retornem per a un UUID desconegut, DIFERENTS segons el getter
-# per descobrir quin accepta el test (PROVA TEMPORAL).
-_PROBE = {
-    "Prompt": None, "Model": "", "Seed": None, "CFG_Scale": "",
-    "Steps": None, "Sampler": "", "Generated": None, "Created_Date": None,
-}
 # --- fi del debug ---
 
 
@@ -62,7 +54,7 @@ class ImageData:
         self._images[uuid] = {
             "file": file,
             "metadata": {},
-            "dimensions": (-1, -1),
+            "dimensions": (0, 0),            # PROVA TEMPORAL (abans (-1, -1))
         }
 
     def remove_image(self, uuid: str) -> None:
@@ -89,7 +81,11 @@ class ImageData:
                     metadata = dict(getattr(img, "text", {}))
             except Exception:
                 metadata = None
-        entry["metadata"] = metadata if metadata else {}
+        if metadata is None:                      # PROVA TEMPORAL: arxiu il·legible
+            _dbg("load_metadata file={!r} NO LLEGIBLE -> s'elimina".format(entry["file"]))
+            self._images.pop(uuid, None)
+            return
+        entry["metadata"] = metadata
 
         # dimensions amb PIL (width i height)
         try:
@@ -107,7 +103,7 @@ class ImageData:
     def _field(self, uuid: str, key: str) -> str:
         entry = self._images.get(uuid)
         if entry is None:
-            value = _PROBE.get(key, "None")
+            value = None
         else:
             value = str(entry["metadata"].get(key, "None"))
         _dbg("{} uuid={!r} conegut={} -> {!r}".format(
@@ -140,14 +136,14 @@ class ImageData:
 
     def get_dimensions(self, uuid: str) -> tuple:
         entry = self._images.get(uuid)
-        value = None if entry is None else entry["dimensions"]      # PROVA TEMPORAL
+        value = None if entry is None else entry["dimensions"]
         _dbg("dimensions uuid={!r} conegut={} -> {}".format(uuid, entry is not None, value))
         return value
 
     def get_filename(self, uuid: str) -> str:
-        """Path guardat per a la imatge."""
+        """Path guardat per a la imatge (None si el UUID no existeix)."""
         entry = self._images.get(uuid)
-        value = "" if entry is None else str(entry["file"])         # PROVA TEMPORAL
+        value = None if entry is None else str(entry["file"])
         _dbg("filename uuid={!r} conegut={} -> {!r}".format(uuid, entry is not None, value))
         return value
 
