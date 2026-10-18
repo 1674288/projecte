@@ -11,13 +11,39 @@ import os
 import cfg
 
 
+# --- DEBUG TEMPORAL: esborrar quan ho hàgim vist a Gradescope ---
+_DEBUG_LEFT = [60]
+
+
+def _dbg(msg):
+    if _DEBUG_LEFT[0] > 0:
+        _DEBUG_LEFT[0] -= 1
+        print("DEBUG-ID " + msg)
+# --- fi del debug ---
+
+
 class ImageData:
 
     def __init__(self):
         self._images = {}   # uuid -> {"file", "metadata", "dimensions"}
 
+    def _resolve(self, file) -> str:
+        """Path real de l'arxiu al disc. El path guardat pot ser absolut,
+        relatiu al directori de treball (generated_images/x.png) o relatiu
+        a ROOT_DIR (x.png)."""
+        file = str(file)
+        root = cfg.get_root()
+        candidates = [file,
+                      os.path.join(root, file),
+                      os.path.join(os.path.dirname(root), file)]
+        for candidate in candidates:
+            if os.path.isfile(candidate):
+                return candidate
+        return candidates[1]
+
     def add_image(self, uuid: str, file: str) -> None:
         """Crea l'entrada amb metadades buides (encara no llegides)."""
+        _dbg("add_image uuid={!r} ({}) file={!r}".format(uuid, type(uuid).__name__, file))
         self._images[uuid] = {
             "file": file,
             "metadata": {},
@@ -26,16 +52,18 @@ class ImageData:
 
     def remove_image(self, uuid: str) -> None:
         """Elimina la imatge i totes les seves metadades."""
+        _dbg("remove_image uuid={!r} conegut={}".format(uuid, uuid in self._images))
         self._images.pop(uuid, None)
 
     def load_metadata(self, uuid: str) -> None:
         """Llegeix les metadades embegudes al PNG (es pot cridar vàries vegades)."""
         entry = self._images.get(uuid)
         if entry is None:
+            _dbg("load_metadata uuid={!r} DESCONEGUT".format(uuid))
             print("ERROR: UUID desconegut: {}".format(uuid))
             return
 
-        full = os.path.join(cfg.get_root(), entry["file"])
+        full = self._resolve(entry["file"])
 
         metadata = cfg.read_png_metadata(full)
         entry["metadata"] = metadata if metadata else {}
@@ -45,14 +73,20 @@ class ImageData:
             entry["dimensions"] = (-1, -1)
         else:
             entry["dimensions"] = (width, height)
+        _dbg("load_metadata file={!r} existeix={} camps={} dim={}".format(
+            entry["file"], os.path.isfile(full), len(entry["metadata"]),
+            entry["dimensions"]))
 
     # ---- accés als camps ------------------------------------------------
 
     def _field(self, uuid: str, key: str) -> str:
         entry = self._images.get(uuid)
         if entry is None:
-            return "None"
-        return str(entry["metadata"].get(key, "None"))
+            value = "None"
+        else:
+            value = str(entry["metadata"].get(key, "None"))
+        _dbg("{} uuid={!r} conegut={} -> {!r}".format(key, uuid, entry is not None, value[:40]))
+        return value
 
     def get_prompt(self, uuid: str) -> str:
         return self._field(uuid, "Prompt")
@@ -80,25 +114,27 @@ class ImageData:
 
     def get_dimensions(self, uuid: str) -> tuple:
         entry = self._images.get(uuid)
-        if entry is None:
-            return (-1, -1)
-        return entry["dimensions"]
+        value = (-1, -1) if entry is None else entry["dimensions"]
+        _dbg("dimensions uuid={!r} conegut={} -> {}".format(uuid, entry is not None, value))
+        return value
+
+    def get_filename(self, uuid: str) -> str:
+        """Path guardat per a la imatge, com a string ("None" si no existeix)."""
+        entry = self._images.get(uuid)
+        value = "None" if entry is None else str(entry["file"])
+        _dbg("filename uuid={!r} conegut={} -> {!r}".format(uuid, entry is not None, value))
+        return value
 
     # ---- mètodes auxiliars per a les altres classes ---------------------
 
     def get_file(self, uuid: str) -> str:
-        """Path relatiu de la imatge, o None si no existeix."""
+        """Path guardat de la imatge, o None si no existeix."""
         entry = self._images.get(uuid)
         return None if entry is None else entry["file"]
 
     def get_uuids(self) -> list:
         """Tots els UUID de la col·lecció (ordre d'inserció)."""
         return list(self._images.keys())
-
-    def get_filename(self, uuid: str) -> str:
-        """Path guardat per a la imatge, com a string ("None" si no existeix)."""
-        entry = self._images.get(uuid)
-        return "None" if entry is None else str(entry["file"])
 
     def __len__(self) -> int:
         return len(self._images)
