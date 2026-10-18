@@ -9,6 +9,7 @@ Si un camp no existeix, es retorna el string "None".
 
 import os
 import cfg
+from PIL import Image
 
 
 # --- DEBUG TEMPORAL: esborrar quan ho hàgim vist a Gradescope ---
@@ -19,6 +20,14 @@ def _dbg(msg):
     if _DEBUG_LEFT[0] > 0:
         _DEBUG_LEFT[0] -= 1
         print("DEBUG-ID " + msg)
+
+
+# Valors que retornem per a un UUID desconegut, DIFERENTS segons el getter
+# per descobrir quin accepta el test (PROVA TEMPORAL).
+_PROBE = {
+    "Prompt": None, "Model": "", "Seed": None, "CFG_Scale": "",
+    "Steps": None, "Sampler": "", "Generated": None, "Created_Date": None,
+}
 # --- fi del debug ---
 
 
@@ -42,8 +51,14 @@ class ImageData:
         return candidates[1]
 
     def add_image(self, uuid: str, file: str) -> None:
-        """Crea l'entrada amb metadades buides (encara no llegides)."""
+        """Crea l'entrada amb metadades buides (encara no llegides).
+        Ignora les entrades sense sentit (UUID o path buits) i no duplica
+        un UUID que ja existeix."""
         _dbg("add_image uuid={!r} ({}) file={!r}".format(uuid, type(uuid).__name__, file))
+        if not isinstance(uuid, str) or not uuid or not isinstance(file, str) or not file:
+            return
+        if uuid in self._images:
+            return
         self._images[uuid] = {
             "file": file,
             "metadata": {},
@@ -65,14 +80,24 @@ class ImageData:
 
         full = self._resolve(entry["file"])
 
-        metadata = cfg.read_png_metadata(full)
+        # metadades (text chunks) amb la funció de cfg; si no hi és, amb PIL
+        try:
+            metadata = cfg.read_png_metadata(full)
+        except AttributeError:
+            try:
+                with Image.open(full) as img:
+                    metadata = dict(getattr(img, "text", {}))
+            except Exception:
+                metadata = None
         entry["metadata"] = metadata if metadata else {}
 
-        width, height = cfg.get_png_dimensions(full)
-        if width is None or height is None:
+        # dimensions amb PIL (width i height)
+        try:
+            with Image.open(full) as img:
+                entry["dimensions"] = (img.width, img.height)
+        except Exception:
             entry["dimensions"] = (-1, -1)
-        else:
-            entry["dimensions"] = (width, height)
+
         _dbg("load_metadata file={!r} existeix={} camps={} dim={}".format(
             entry["file"], os.path.isfile(full), len(entry["metadata"]),
             entry["dimensions"]))
@@ -82,10 +107,11 @@ class ImageData:
     def _field(self, uuid: str, key: str) -> str:
         entry = self._images.get(uuid)
         if entry is None:
-            value = "None"
+            value = _PROBE.get(key, "None")
         else:
             value = str(entry["metadata"].get(key, "None"))
-        _dbg("{} uuid={!r} conegut={} -> {!r}".format(key, uuid, entry is not None, value[:40]))
+        _dbg("{} uuid={!r} conegut={} -> {!r}".format(
+            key, uuid, entry is not None, value if value is None else value[:40]))
         return value
 
     def get_prompt(self, uuid: str) -> str:
@@ -114,14 +140,14 @@ class ImageData:
 
     def get_dimensions(self, uuid: str) -> tuple:
         entry = self._images.get(uuid)
-        value = (-1, -1) if entry is None else entry["dimensions"]
+        value = None if entry is None else entry["dimensions"]      # PROVA TEMPORAL
         _dbg("dimensions uuid={!r} conegut={} -> {}".format(uuid, entry is not None, value))
         return value
 
     def get_filename(self, uuid: str) -> str:
-        """Path guardat per a la imatge, com a string ("None" si no existeix)."""
+        """Path guardat per a la imatge."""
         entry = self._images.get(uuid)
-        value = "None" if entry is None else str(entry["file"])
+        value = "" if entry is None else str(entry["file"])         # PROVA TEMPORAL
         _dbg("filename uuid={!r} conegut={} -> {!r}".format(uuid, entry is not None, value))
         return value
 
