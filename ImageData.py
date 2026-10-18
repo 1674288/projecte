@@ -4,23 +4,13 @@ ImageData.py : guarda el path i les metadades de cada imatge.
 
 Estructura de dades: un diccionari uuid -> entrada, on cada entrada és un
 diccionari amb el path, les metadades (strings) i les dimensions.
-Si un camp no existeix, es retorna el string "None".
+Si un camp de metadades no existeix, es retorna el string "None".
+Si el UUID no existeix, els getters retornen None.
 """
 
 import os
 import cfg
 from PIL import Image
-
-
-# --- DEBUG TEMPORAL: esborrar quan ho hàgim vist a Gradescope ---
-_DEBUG_LEFT = [60]
-
-
-def _dbg(msg):
-    if _DEBUG_LEFT[0] > 0:
-        _DEBUG_LEFT[0] -= 1
-        print("DEBUG-ID " + msg)
-# --- fi del debug ---
 
 
 class ImageData:
@@ -42,11 +32,18 @@ class ImageData:
                 return candidate
         return candidates[1]
 
+    def _read_dimensions(self, file) -> tuple:
+        """(width, height) de la imatge, o (-1, -1) si no es pot llegir."""
+        try:
+            with Image.open(self._resolve(file)) as img:
+                return (img.width, img.height)
+        except Exception:
+            return (-1, -1)
+
     def add_image(self, uuid: str, file: str) -> None:
         """Crea l'entrada amb metadades buides (encara no llegides).
         Ignora les entrades sense sentit (UUID o path buits) i no duplica
         un UUID que ja existeix."""
-        _dbg("add_image uuid={!r} ({}) file={!r}".format(uuid, type(uuid).__name__, file))
         if not isinstance(uuid, str) or not uuid or not isinstance(file, str) or not file:
             return
         if uuid in self._images:
@@ -54,19 +51,17 @@ class ImageData:
         self._images[uuid] = {
             "file": file,
             "metadata": {},
-            "dimensions": (0, 0),            # PROVA TEMPORAL (abans (-1, -1))
+            "dimensions": None,      # es llegeixen quan es demanen
         }
 
     def remove_image(self, uuid: str) -> None:
         """Elimina la imatge i totes les seves metadades."""
-        _dbg("remove_image uuid={!r} conegut={}".format(uuid, uuid in self._images))
         self._images.pop(uuid, None)
 
     def load_metadata(self, uuid: str) -> None:
         """Llegeix les metadades embegudes al PNG (es pot cridar vàries vegades)."""
         entry = self._images.get(uuid)
         if entry is None:
-            _dbg("load_metadata uuid={!r} DESCONEGUT".format(uuid))
             print("ERROR: UUID desconegut: {}".format(uuid))
             return
 
@@ -81,34 +76,17 @@ class ImageData:
                     metadata = dict(getattr(img, "text", {}))
             except Exception:
                 metadata = None
-        if metadata is None:                      # PROVA TEMPORAL: arxiu il·legible
-            _dbg("load_metadata file={!r} NO LLEGIBLE -> s'elimina".format(entry["file"]))
-            self._images.pop(uuid, None)
-            return
-        entry["metadata"] = metadata
+        entry["metadata"] = metadata if metadata else {}
 
-        # dimensions amb PIL (width i height)
-        try:
-            with Image.open(full) as img:
-                entry["dimensions"] = (img.width, img.height)
-        except Exception:
-            entry["dimensions"] = (-1, -1)
-
-        _dbg("load_metadata file={!r} existeix={} camps={} dim={}".format(
-            entry["file"], os.path.isfile(full), len(entry["metadata"]),
-            entry["dimensions"]))
+        entry["dimensions"] = self._read_dimensions(entry["file"])
 
     # ---- accés als camps ------------------------------------------------
 
     def _field(self, uuid: str, key: str) -> str:
         entry = self._images.get(uuid)
         if entry is None:
-            value = None
-        else:
-            value = str(entry["metadata"].get(key, "None"))
-        _dbg("{} uuid={!r} conegut={} -> {!r}".format(
-            key, uuid, entry is not None, value if value is None else value[:40]))
-        return value
+            return None
+        return str(entry["metadata"].get(key, "None"))
 
     def get_prompt(self, uuid: str) -> str:
         return self._field(uuid, "Prompt")
@@ -135,17 +113,18 @@ class ImageData:
         return self._field(uuid, "Created_Date")
 
     def get_dimensions(self, uuid: str) -> tuple:
+        """(width, height) de la imatge; None si el UUID no existeix."""
         entry = self._images.get(uuid)
-        value = None if entry is None else entry["dimensions"]
-        _dbg("dimensions uuid={!r} conegut={} -> {}".format(uuid, entry is not None, value))
-        return value
+        if entry is None:
+            return None
+        if entry["dimensions"] is None:
+            entry["dimensions"] = self._read_dimensions(entry["file"])
+        return entry["dimensions"]
 
     def get_filename(self, uuid: str) -> str:
         """Path guardat per a la imatge (None si el UUID no existeix)."""
         entry = self._images.get(uuid)
-        value = None if entry is None else str(entry["file"])
-        _dbg("filename uuid={!r} conegut={} -> {!r}".format(uuid, entry is not None, value))
-        return value
+        return None if entry is None else str(entry["file"])
 
     # ---- mètodes auxiliars per a les altres classes ---------------------
 
