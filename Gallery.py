@@ -14,6 +14,17 @@ from collections import deque
 import cfg
 
 
+# --- DEBUG TEMPORAL: esborrar quan ho hàgim vist a Gradescope ---
+_DEBUG_LEFT = [40]
+
+
+def _dbg(msg):
+    if _DEBUG_LEFT[0] > 0:
+        _DEBUG_LEFT[0] -= 1
+        print("DEBUG-GA " + msg)
+# --- fi del debug ---
+
+
 class Gallery:
 
     def __init__(self, image_id, image_viewer):
@@ -43,7 +54,15 @@ class Gallery:
         return None
 
     def load_file(self, file: str) -> None:
-        """Llegeix el JSON de la galeria; ignora les imatges que no existeixen."""
+        """Llegeix el JSON de la galeria; ignora les imatges que no existeixen.
+        Carregar substitueix sempre el contingut anterior, també si l'arxiu
+        no es pot llegir (llavors la galeria queda buida)."""
+        _dbg("load_file {!r} (abans: {} imatges)".format(file, len(self._uuids)))
+        self.name = ""
+        self.description = ""
+        self.created_date = ""
+        self._uuids = deque()
+
         try:
             with open(file, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -63,13 +82,13 @@ class Gallery:
         if not isinstance(images, list):
             images = []
 
-        self._uuids = deque()
         for path in images:
             uuid = self._find_uuid(path) if isinstance(path, str) else None
             if uuid is None:
                 print("AVÍS: imatge inexistent a la col·lecció, s'ignora: {}".format(path))
                 continue
             self._uuids.append(uuid)
+        _dbg("load_file -> {} imatges".format(len(self._uuids)))
 
     def show(self) -> None:
         """Visualitza totes les imatges de la galeria, en ordre."""
@@ -77,13 +96,20 @@ class Gallery:
             self._viewer.show_image(uuid, cfg.DISPLAY_MODE)
 
     def add_image_at_end(self, uuid: str) -> None:
+        """Afegeix una imatge al final (s'accepten repeticions).
+        Ignora UUID buits o que no són strings."""
+        _dbg("add_image_at_end {!r} (abans: {})".format(uuid, len(self._uuids)))
+        if not isinstance(uuid, str) or not uuid:
+            return
         self._uuids.append(uuid)
 
     def remove_first_image(self) -> None:
+        _dbg("remove_first_image (abans: {})".format(len(self._uuids)))
         if self._uuids:
             self._uuids.popleft()
 
     def remove_last_image(self) -> None:
+        _dbg("remove_last_image (abans: {})".format(len(self._uuids)))
         if self._uuids:
             self._uuids.pop()
 
